@@ -1,0 +1,4 @@
+*.so
+*.task
+*.onnx
+include/

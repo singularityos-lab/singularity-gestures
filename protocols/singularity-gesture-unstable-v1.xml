@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="singularity_gesture_unstable_v1">
+  <copyright>
+    Copyright 2026 Singularity Desktop contributors
+  </copyright>
+
+  <interface name="zsingularity_gesture_manager_v1" version="3">
+    <description summary="desktop gesture progress">
+      Reports compositor-owned gestures to the desktop shell so its surfaces
+      can follow the user's fingers.
+    </description>
+
+    <enum name="direction">
+      <entry name="left" value="1"/>
+      <entry name="right" value="2"/>
+      <entry name="up" value="3"/>
+      <entry name="down" value="4"/>
+    </enum>
+
+    <event name="begin">
+      <arg name="fingers" type="uint"/>
+      <arg name="direction" type="uint" enum="direction"/>
+    </event>
+
+    <event name="update">
+      <arg name="dx" type="fixed"/>
+      <arg name="dy" type="fixed"/>
+    </event>
+
+    <event name="end">
+      <arg name="cancelled" type="uint"/>
+      <arg name="committed" type="uint"/>
+    </event>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="toggle_desktop_reveal" since="2">
+      <description summary="toggle the animated desktop reveal">
+        Reveals the desktop by moving current-workspace windows toward the
+        screen edges, or restores them to their saved geometry.
+      </description>
+    </request>
+
+    <request name="begin_control" since="3">
+      <description summary="begin a camera-controlled desktop gesture">
+        Starts a desktop gesture using the same coordinate space and routing
+        as a compositor-owned touchpad gesture.
+      </description>
+      <arg name="fingers" type="uint"/>
+      <arg name="direction" type="uint" enum="direction"/>
+    </request>
+
+    <request name="update_control" since="3">
+      <arg name="dx" type="fixed"/>
+      <arg name="dy" type="fixed"/>
+    </request>
+
+    <request name="end_control" since="3">
+      <arg name="cancelled" type="uint"/>
+      <arg name="committed" type="uint"/>
+    </request>
+  </interface>
+</protocol>
