@@ -6,6 +6,25 @@ project_dir=$(cd -- "$script_dir/.." && pwd)
 runtime_dir="$project_dir/runtime"
 download_dir=$(mktemp -d)
 
+case "$(uname -m)" in
+    x86_64|amd64)
+        onnx_arch=x64
+        mediapipe_platform=manylinux_2_28_x86_64
+        mediapipe_hash=b72e6d61a79d1080d29a96ba95e3cfa3e43f6c433c0acc3bc9b3eb7ac0ba103a
+        onnxruntime_hash=13ab8084954fa4a47c777880180b90810d6020f021441395712b48a75b74c68b
+        ;;
+    aarch64|arm64)
+        onnx_arch=aarch64
+        mediapipe_platform=manylinux_2_28_aarch64
+        mediapipe_hash=b60afadf1a6c0bf9aae5ae2be5c66257e4e951ff0a123e86e3f6d24647854793
+        onnxruntime_hash=648ffa64fbe027ae27139109410900cf776a030dec2dbbac51053318cc44c286
+        ;;
+    *)
+        printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
 cleanup() {
     rm -rf -- "$download_dir"
 }
@@ -24,16 +43,26 @@ verify_file() {
 
 mkdir -p "$runtime_dir/include"
 if [[ ! -f "$runtime_dir/libmediapipe.so" ]]; then
-    /usr/bin/python3.12 -m venv "$download_dir/venv"
+    python_cmd=$(command -v python3 || true)
+    if [[ -z "$python_cmd" ]]; then
+        printf 'python3 is required to download MediaPipe\n' >&2
+        exit 1
+    fi
+
+    "$python_cmd" -m venv "$download_dir/venv"
     "$download_dir/venv/bin/python" -m pip download \
         --disable-pip-version-check \
         --only-binary=:all: \
         --no-deps \
+        --platform "$mediapipe_platform" \
+        --python-version 3 \
+        --implementation py \
+        --abi none \
         --dest "$download_dir" \
         mediapipe==1.0.1
 
     wheel=$(find "$download_dir" -name 'mediapipe-*.whl' -print -quit)
-    /usr/bin/python3.12 - "$wheel" "$runtime_dir/libmediapipe.so" <<'PY'
+    "$python_cmd" - "$wheel" "$runtime_dir/libmediapipe.so" <<'PY'
 import pathlib
 import sys
 import zipfile
@@ -66,9 +95,9 @@ if [[ ! -f "$runtime_dir/libonnxruntime.so" ||
     onnx_archive="$download_dir/onnxruntime.tgz"
     curl --fail --location --silent --show-error \
         --output "$onnx_archive" \
-        "https://github.com/microsoft/onnxruntime/releases/download/v$onnx_version/onnxruntime-linux-x64-$onnx_version.tgz"
+        "https://github.com/microsoft/onnxruntime/releases/download/v$onnx_version/onnxruntime-linux-$onnx_arch-$onnx_version.tgz"
     tar -xzf "$onnx_archive" -C "$download_dir"
-    onnx_dir="$download_dir/onnxruntime-linux-x64-$onnx_version"
+    onnx_dir="$download_dir/onnxruntime-linux-$onnx_arch-$onnx_version"
     cp "$onnx_dir/lib/libonnxruntime.so.$onnx_version" \
         "$runtime_dir/libonnxruntime.so"
     cp "$onnx_dir/include/onnxruntime_c_api.h" \
@@ -83,13 +112,13 @@ if [[ ! -f "$runtime_dir/mobileone_s0_gaze.onnx" ]]; then
         https://github.com/yakhyo/gaze-estimation/releases/download/weights/mobileone_s0_gaze.onnx
 fi
 
-verify_file b72e6d61a79d1080d29a96ba95e3cfa3e43f6c433c0acc3bc9b3eb7ac0ba103a \
+verify_file "$mediapipe_hash" \
     "$runtime_dir/libmediapipe.so"
 verify_file fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1 \
     "$runtime_dir/hand_landmarker.task"
 verify_file 64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff \
     "$runtime_dir/face_landmarker.task"
-verify_file 13ab8084954fa4a47c777880180b90810d6020f021441395712b48a75b74c68b \
+verify_file "$onnxruntime_hash" \
     "$runtime_dir/libonnxruntime.so"
 verify_file 71125e66180a991d65c9bdbad4aa20daaa1f7a48c7a5c0fa5f18f250ac839a02 \
     "$runtime_dir/include/onnxruntime_c_api.h"

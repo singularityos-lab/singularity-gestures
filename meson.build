@@ -8,6 +8,22 @@ project('singularity-gestures', ['c', 'cpp'],
   ],
 )
 
+fs = import('fs')
+runtime_files = [
+  'runtime/libmediapipe.so',
+  'runtime/hand_landmarker.task',
+  'runtime/face_landmarker.task',
+  'runtime/libonnxruntime.so',
+  'runtime/mobileone_s0_gaze.onnx',
+  'runtime/include/onnxruntime_c_api.h',
+  'runtime/include/onnxruntime_ep_c_api.h',
+]
+foreach runtime_file : runtime_files
+  if not fs.is_file(runtime_file)
+    error('Gesture runtime is missing. Run scripts/bootstrap-runtime.sh before configuring.')
+  endif
+endforeach
+
 cc = meson.get_compiler('cpp')
 
 sdl_dep = dependency('sdl2')
