@@ -49,17 +49,23 @@ if [[ ! -f "$runtime_dir/libmediapipe.so" ]]; then
         exit 1
     fi
 
-    "$python_cmd" -m venv "$download_dir/venv"
-    "$download_dir/venv/bin/python" -m pip download \
-        --disable-pip-version-check \
-        --only-binary=:all: \
-        --no-deps \
-        --platform "$mediapipe_platform" \
-        --python-version 3 \
-        --implementation py \
-        --abi none \
-        --dest "$download_dir" \
-        mediapipe==1.0.1
+    wheel_url=$("$python_cmd" - "$mediapipe_platform" <<'PY'
+import json
+import sys
+import urllib.request
+
+with urllib.request.urlopen("https://pypi.org/pypi/mediapipe/1.0.1/json") as reply:
+    files = json.load(reply)["urls"]
+for item in files:
+    if item["packagetype"] == "bdist_wheel" and item["filename"].endswith(sys.argv[1] + ".whl"):
+        print(item["url"])
+        break
+else:
+    sys.exit("No MediaPipe wheel for " + sys.argv[1])
+PY
+)
+    curl --fail --location --silent --show-error \
+        --output "$download_dir/${wheel_url##*/}" "$wheel_url"
 
     wheel=$(find "$download_dir" -name 'mediapipe-*.whl' -print -quit)
     "$python_cmd" - "$wheel" "$runtime_dir/libmediapipe.so" <<'PY'
