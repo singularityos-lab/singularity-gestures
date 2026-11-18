@@ -6,21 +6,23 @@ project_dir=$(cd -- "$script_dir/.." && pwd)
 runtime_dir="$project_dir/runtime"
 download_dir=$(mktemp -d)
 
-case "$(uname -m)" in
+target_arch=${1:-$(uname -m)}
+
+case "$target_arch" in
     x86_64|amd64)
-        onnx_arch=x64
+        onnx_arch=linux-x64
         mediapipe_platform=manylinux_2_28_x86_64
         mediapipe_hash=b72e6d61a79d1080d29a96ba95e3cfa3e43f6c433c0acc3bc9b3eb7ac0ba103a
         onnxruntime_hash=13ab8084954fa4a47c777880180b90810d6020f021441395712b48a75b74c68b
         ;;
     aarch64|arm64)
-        onnx_arch=aarch64
+        onnx_arch=linux-arm64
         mediapipe_platform=manylinux_2_28_aarch64
         mediapipe_hash=b60afadf1a6c0bf9aae5ae2be5c66257e4e951ff0a123e86e3f6d24647854793
         onnxruntime_hash=648ffa64fbe027ae27139109410900cf776a030dec2dbbac51053318cc44c286
         ;;
     *)
-        printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2
+        printf 'Unsupported architecture: %s\n' "$target_arch" >&2
         exit 1
         ;;
 esac
@@ -98,18 +100,23 @@ if [[ ! -f "$runtime_dir/libonnxruntime.so" ||
       ! -f "$runtime_dir/include/onnxruntime_c_api.h" ||
       ! -f "$runtime_dir/include/onnxruntime_ep_c_api.h" ]]; then
     onnx_version=1.23.2
-    onnx_archive="$download_dir/onnxruntime.tgz"
+    onnx_package="$download_dir/onnxruntime.nupkg"
     curl --fail --location --silent --show-error \
-        --output "$onnx_archive" \
-        "https://github.com/microsoft/onnxruntime/releases/download/v$onnx_version/onnxruntime-linux-$onnx_arch-$onnx_version.tgz"
-    tar -xzf "$onnx_archive" -C "$download_dir"
-    onnx_dir="$download_dir/onnxruntime-linux-$onnx_arch-$onnx_version"
-    cp "$onnx_dir/lib/libonnxruntime.so.$onnx_version" \
-        "$runtime_dir/libonnxruntime.so"
-    cp "$onnx_dir/include/onnxruntime_c_api.h" \
-        "$runtime_dir/include/onnxruntime_c_api.h"
-    cp "$onnx_dir/include/onnxruntime_ep_c_api.h" \
-        "$runtime_dir/include/onnxruntime_ep_c_api.h"
+        --output "$onnx_package" \
+        "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/$onnx_version/microsoft.ml.onnxruntime.$onnx_version.nupkg"
+    python3 - "$onnx_package" "$onnx_arch" "$runtime_dir" <<'PY'
+import pathlib
+import sys
+import zipfile
+
+package, arch, runtime = sys.argv[1], sys.argv[2], pathlib.Path(sys.argv[3])
+with zipfile.ZipFile(package) as archive:
+    (runtime / "libonnxruntime.so").write_bytes(
+        archive.read(f"runtimes/{arch}/native/libonnxruntime.so"))
+    for header in ("onnxruntime_c_api.h", "onnxruntime_ep_c_api.h"):
+        text = archive.read(f"build/native/include/{header}").replace(b"\r\n", b"\n")
+        (runtime / "include" / header).write_bytes(text)
+PY
 fi
 
 if [[ ! -f "$runtime_dir/mobileone_s0_gaze.onnx" ]]; then

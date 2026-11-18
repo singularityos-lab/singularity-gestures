@@ -31,6 +31,9 @@ meson compile -C build
 meson test -C build --print-errorlogs
 ```
 
+The runtime matches the build machine. When cross-compiling, pass the target
+architecture instead: `./scripts/bootstrap-runtime.sh aarch64`.
+
 Run the calibration client:
 
 ```sh
